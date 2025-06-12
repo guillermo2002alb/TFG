@@ -43,6 +43,8 @@ class GranadaAirQualityService {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    var onStationData: ((SensorInfo) -> Unit)? = null
+
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun startPolling() {
@@ -244,6 +246,7 @@ class GranadaAirQualityService {
             )
 
             MainActivity.sensorsData[sensorInfo.deviceId] = sensorInfo
+            onStationData?.invoke(sensorInfo)
 
         } catch (e: Exception) {
             Log.e(TAG, "Error procesando datos WAQI para $stationName", e)

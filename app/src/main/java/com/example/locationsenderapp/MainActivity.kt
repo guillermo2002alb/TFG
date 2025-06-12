@@ -24,7 +24,14 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.Intent
+import com.example.locationsenderapp.service.StatsWorker
+import com.example.locationsenderapp.data.StationDatabase
+import com.example.locationsenderapp.data.StationRepository
 import android.content.pm.PackageManager
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -87,6 +94,7 @@ class MainActivity : ComponentActivity() {
         private const val PREFS_NAME = "breathe_safe_prefs"
         private const val PREF_NOTIFICATIONS_ENABLED = "notifications_enabled"
         private const val PREF_NOTIFICATION_FREQUENCY = "notification_frequency"
+        private const val PREF_USER_EMAIL = "user_email"
 
         // Lista de sensores con sus datos
         val sensorsData = mutableStateMapOf<String, SensorInfo>()
@@ -104,7 +112,11 @@ class MainActivity : ComponentActivity() {
     private var showMap by mutableStateOf(false)
 
     // Servicio para datos de Granada
-    private val granadaAirService = GranadaAirQualityService()
+    // Repositorio y servicio para datos de Granada
+    private lateinit var stationRepository: StationRepository
+    private lateinit var granadaAirService: GranadaAirQualityService
+
+    private var userEmail by mutableStateOf("")
 
     private var showSettingsDialog by mutableStateOf(false)
     private var showBatteryOptimizationDialog by mutableStateOf(false)
@@ -124,6 +136,16 @@ class MainActivity : ComponentActivity() {
         sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         notificationsEnabled = sharedPreferences.getBoolean(PREF_NOTIFICATIONS_ENABLED, false)
         notificationFrequency = sharedPreferences.getInt(PREF_NOTIFICATION_FREQUENCY, 30)
+        userEmail = sharedPreferences.getString(PREF_USER_EMAIL, "") ?: ""
+
+        stationRepository = StationRepository(StationDatabase.getDatabase(this).stationDataDao())
+        granadaAirService = GranadaAirQualityService().apply {
+            onStationData = { sensor ->
+                lifecycleScope.launch {
+                    stationRepository.insert(StationRepository.fromSensorInfo(sensor))
+                }
+            }
+        }
 
         createNotificationChannel()
 
@@ -196,6 +218,17 @@ class MainActivity : ComponentActivity() {
 
         // Iniciar servicio de datos de Granada
         granadaAirService.startPolling()
+
+        if (userEmail.isNotEmpty()) {
+            val work = PeriodicWorkRequestBuilder<StatsWorker>(24, TimeUnit.HOURS)
+                .setInputData(workDataOf(StatsWorker.KEY_EMAIL to userEmail))
+                .build()
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "stats_worker",
+                ExistingPeriodicWorkPolicy.UPDATE,
+                work
+            )
+        }
 
         // Obtener ubicación del usuario con interpolación
         getCurrentLocationWithInterpolation()
@@ -479,12 +512,14 @@ class MainActivity : ComponentActivity() {
     fun SettingsDialog(
         notificationsEnabled: Boolean,
         notificationFrequency: Int,
+        email: String,
         onNotificationsEnabledChange: (Boolean) -> Unit,
         onFrequencyChange: (Int) -> Unit,
+        onEmailChange: (String) -> Unit,
         onDismiss: () -> Unit
     ) {
         var tempFrequency by remember { mutableStateOf(notificationFrequency.toString()) }
-
+        var tempEmail by remember { mutableStateOf(email) }
         AlertDialog(
             onDismissRequest = onDismiss,
             title = {
@@ -577,6 +612,16 @@ class MainActivity : ComponentActivity() {
 
                             Spacer(modifier = Modifier.height(8.dp))
 
+                            OutlinedTextField(
+                                value = tempEmail,
+                                onValueChange = { tempEmail = it },
+                                label = { Text("Email") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
                             // Información adicional sobre el servicio
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -622,6 +667,7 @@ class MainActivity : ComponentActivity() {
                         if (frequency != null && frequency in 5..999) {
                             onFrequencyChange(frequency)
                         }
+                        onEmailChange(tempEmail)
                         onDismiss()
                     }
                 ) {
@@ -953,6 +999,7 @@ class MainActivity : ComponentActivity() {
             SettingsDialog(
                 notificationsEnabled = notificationsEnabled,
                 notificationFrequency = notificationFrequency,
+                email = userEmail,
                 onNotificationsEnabledChange = { enabled ->
                     notificationsEnabled = enabled
                     savePreferences()
@@ -985,6 +1032,10 @@ class MainActivity : ComponentActivity() {
                         }
                         Log.d(TAG, "Servicios reiniciados con frecuencia: $frequency min")
                     }
+                },
+                onEmailChange = {
+                    userEmail = it
+                    savePreferences()
                 },
                 onDismiss = { showSettingsDialog = false }
             )
@@ -2084,6 +2135,7 @@ class MainActivity : ComponentActivity() {
         sharedPreferences.edit().apply {
             putBoolean(PREF_NOTIFICATIONS_ENABLED, notificationsEnabled)
             putInt(PREF_NOTIFICATION_FREQUENCY, notificationFrequency)
+            putString(PREF_USER_EMAIL, userEmail)
             apply()
         }
     }
