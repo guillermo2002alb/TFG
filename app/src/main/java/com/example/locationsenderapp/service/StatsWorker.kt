@@ -12,21 +12,21 @@ class StatsWorker(appContext: Context, params: WorkerParameters) : CoroutineWork
 
     companion object {
         const val KEY_EMAIL = "user_email"
-        const val KEY_HOURS = "hours"
+        const val KEY_MINUTES = "minutes"
     }
 
     override suspend fun doWork(): Result {
         val email = inputData.getString(KEY_EMAIL) ?: return Result.failure()
-        val hours = inputData.getInt(KEY_HOURS, 24)
+        val minutes = inputData.getInt(KEY_MINUTES, 1)
         val db = StationDatabase.getDatabase(applicationContext)
         val repo = StationRepository(db.stationDataDao())
 
         val end = System.currentTimeMillis()
-        val start = end - TimeUnit.HOURS.toMillis(hours.toLong())
+        val start = end - TimeUnit.MINUTES.toMillis(minutes.toLong())
 
         val stations = repo.getStationNames()
         val summary = StringBuilder()
-        summary.append("Resumen de calidad del aire - últimas $hours h\n\n")
+        summary.append("Resumen de calidad del aire - últimos $minutes min\n\n")
 
         for (station in stations) {
             val stats = repo.getAverageStats(station, start, end)

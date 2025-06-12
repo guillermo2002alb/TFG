@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity() {
     private var showBatteryOptimizationDialog by mutableStateOf(false)
     private var notificationsEnabled by mutableStateOf(false)
     private var notificationFrequency by mutableStateOf(30) // minutos por defecto
-    private var emailFrequency by mutableStateOf(24) // horas por defecto
+    private var emailFrequency by mutableStateOf(1) // horas por defecto
     private lateinit var sharedPreferences: SharedPreferences
 
     // Cliente para ubicación
@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
         notificationsEnabled = sharedPreferences.getBoolean(PREF_NOTIFICATIONS_ENABLED, false)
         notificationFrequency = sharedPreferences.getInt(PREF_NOTIFICATION_FREQUENCY, 30)
         userEmail = sharedPreferences.getString(PREF_USER_EMAIL, "") ?: ""
-        emailFrequency = sharedPreferences.getInt(PREF_EMAIL_FREQUENCY, 24)
+        emailFrequency = sharedPreferences.getInt(PREF_EMAIL_FREQUENCY, 1)
 
         stationRepository = StationRepository(StationDatabase.getDatabase(this).stationDataDao())
         granadaAirService = GranadaAirQualityService().apply {
@@ -887,7 +887,24 @@ class MainActivity : ComponentActivity() {
                                 icon = Icons.Default.MyLocation,
                                 title = "Mi Ubicación (Estimado)",
                                 content = run {
-                                    val aqi = userSensor.pollutionData.aqi.toInt()
+                                    val aqi = if (userSensor.pollutionData.name.contains("Estimación")) {
+                                        val individualAqis = mutableListOf<Double>()
+
+                                        if (userSensor.pollutionData.co > 0) individualAqis.add(userSensor.pollutionData.co)
+                                        if (userSensor.pollutionData.co2 > 0) individualAqis.add(userSensor.pollutionData.co2)
+                                        if (userSensor.pollutionData.so2 > 0) individualAqis.add(userSensor.pollutionData.so2)
+                                        if (userSensor.pollutionData.o3 > 0) individualAqis.add(userSensor.pollutionData.o3)
+                                        if (userSensor.pollutionData.no2 > 0) individualAqis.add(userSensor.pollutionData.no2)
+                                        if (userSensor.pollutionData.pm10 > 0) individualAqis.add(userSensor.pollutionData.pm10)
+                                        if (userSensor.pollutionData.pm4_0 > 0) individualAqis.add(userSensor.pollutionData.pm4_0)
+                                        if (userSensor.pollutionData.pm2_5 > 0) individualAqis.add(userSensor.pollutionData.pm2_5)
+                                        if (userSensor.pollutionData.pm1_0 > 0) individualAqis.add(userSensor.pollutionData.pm1_0)
+
+                                        individualAqis.maxOrNull()?.toInt() ?: userSensor.pollutionData.aqi.toInt()
+                                    } else {
+                                        userSensor.pollutionData.aqi.toInt() // Retorna el AQI del sensor directamente
+                                    }
+
                                     val aqiLevel = when {
                                         aqi <= 33 -> "Muy Buena"
                                         aqi <= 66 -> "Buena"
@@ -933,7 +950,24 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     else -> {
-                                        val aqi = sensorInfo.pollutionData.aqi.toInt()
+                                        val aqi = if (sensorInfo.pollutionData.name.contains("granada")) {
+                                            sensorInfo.pollutionData.aqi.toInt() // Eliminé la declaración duplicada
+                                        } else {
+                                            val individualAqis = mutableListOf<Double>()
+
+                                            if (sensorInfo.pollutionData.co > 0) individualAqis.add(convertToICA("CO", sensorInfo.pollutionData.co))
+                                            if (sensorInfo.pollutionData.name.contains("my-tfg-2025") && sensorInfo.pollutionData.co2 > 0) {
+                                                individualAqis.add(convertToICA("CO2", sensorInfo.pollutionData.co2))
+                                            }
+                                            if (sensorInfo.pollutionData.no2 > 0) individualAqis.add(convertToICA("NO2", sensorInfo.pollutionData.no2))
+                                            if (sensorInfo.pollutionData.pm10 > 0) individualAqis.add(convertToICA("PM10", sensorInfo.pollutionData.pm10))
+                                            if (sensorInfo.pollutionData.pm4_0 > 0) individualAqis.add(convertToICA("PM4", sensorInfo.pollutionData.pm4_0))
+                                            if (sensorInfo.pollutionData.pm2_5 > 0) individualAqis.add(convertToICA("PM25", sensorInfo.pollutionData.pm2_5))
+                                            if (sensorInfo.pollutionData.pm1_0 > 0) individualAqis.add(convertToICA("PM1", sensorInfo.pollutionData.pm1_0))
+
+                                            individualAqis.maxOrNull()?.toInt() ?: sensorInfo.pollutionData.aqi.toInt()
+                                        }
+
                                         val aqiLevel = when {
                                             aqi <= 33 -> "Muy Buena"
                                             aqi <= 66 -> "Buena"
@@ -1219,7 +1253,43 @@ class MainActivity : ComponentActivity() {
                             title = if (deviceId == "user-location") "Mi ubicación (Estimado)" else sensorInfo.pollutionData.name,
                             snippet = when {
                                 deviceId == "user-location" -> {
-                                    val aqi = sensorInfo.pollutionData.aqi.toInt()
+                                    val aqi =
+                                        if (sensorInfo.pollutionData.name.contains("Estimación")) {
+                                            val individualAqis = mutableListOf<Double>()
+
+                                            if (sensorInfo.pollutionData.co > 0) individualAqis.add(
+                                                sensorInfo.pollutionData.co
+                                            )
+                                            if (sensorInfo.pollutionData.co2 > 0) individualAqis.add(
+                                                sensorInfo.pollutionData.co2
+                                            )
+                                            if (sensorInfo.pollutionData.so2 > 0) individualAqis.add(
+                                                sensorInfo.pollutionData.so2
+                                            )
+                                            if (sensorInfo.pollutionData.o3 > 0) individualAqis.add(
+                                                sensorInfo.pollutionData.o3
+                                            )
+                                            if (sensorInfo.pollutionData.no2 > 0) individualAqis.add(
+                                                sensorInfo.pollutionData.no2
+                                            )
+                                            if (sensorInfo.pollutionData.pm10 > 0) individualAqis.add(
+                                                sensorInfo.pollutionData.pm10
+                                            )
+                                            if (sensorInfo.pollutionData.pm4_0 > 0) individualAqis.add(
+                                                sensorInfo.pollutionData.pm4_0
+                                            )
+                                            if (sensorInfo.pollutionData.pm2_5 > 0) individualAqis.add(
+                                                sensorInfo.pollutionData.pm2_5
+                                            )
+                                            if (sensorInfo.pollutionData.pm1_0 > 0) individualAqis.add(
+                                                sensorInfo.pollutionData.pm1_0
+                                            )
+
+                                            individualAqis.maxOrNull()?.toInt()
+                                                ?: sensorInfo.pollutionData.aqi.toInt()
+                                        } else {
+                                            val aqi = 0
+                                        }
                                     "AQI Estimado: $aqi"
                                 }
 
@@ -1228,12 +1298,26 @@ class MainActivity : ComponentActivity() {
                                     "AQI: $aqi"
                                 }
 
-                                else -> "Temp: ${
-                                    String.format(
-                                        "%.1f",
-                                        sensorInfo.pollutionData.temperature
-                                    )
-                                }°C"
+                                else -> {
+                                    val aqi = if (sensorInfo.pollutionData.name.contains("granada")) {
+                                        sensorInfo.pollutionData.aqi.toInt() // Eliminé la declaración duplicada
+                                    } else {
+                                        val individualAqis = mutableListOf<Double>()
+
+                                        if (sensorInfo.pollutionData.co > 0) individualAqis.add(convertToICA("CO", sensorInfo.pollutionData.co))
+                                        if (sensorInfo.pollutionData.name.contains("my-tfg-2025") && sensorInfo.pollutionData.co2 > 0) {
+                                            individualAqis.add(convertToICA("CO2", sensorInfo.pollutionData.co2))
+                                        }
+                                        if (sensorInfo.pollutionData.no2 > 0) individualAqis.add(convertToICA("NO2", sensorInfo.pollutionData.no2))
+                                        if (sensorInfo.pollutionData.pm10 > 0) individualAqis.add(convertToICA("PM10", sensorInfo.pollutionData.pm10))
+                                        if (sensorInfo.pollutionData.pm4_0 > 0) individualAqis.add(convertToICA("PM4", sensorInfo.pollutionData.pm4_0))
+                                        if (sensorInfo.pollutionData.pm2_5 > 0) individualAqis.add(convertToICA("PM25", sensorInfo.pollutionData.pm2_5))
+                                        if (sensorInfo.pollutionData.pm1_0 > 0) individualAqis.add(convertToICA("PM1", sensorInfo.pollutionData.pm1_0))
+
+                                        individualAqis.maxOrNull()?.toInt() ?: sensorInfo.pollutionData.aqi.toInt()
+                                    }
+                                    "AQI: $aqi"
+                            }
                             },
                             icon = BitmapDescriptorFactory.defaultMarker(markerColor),
                             zIndex = zIndex,
@@ -2178,11 +2262,11 @@ class MainActivity : ComponentActivity() {
 
     private fun scheduleEmailWorker() {
         if (userEmail.isNotEmpty()) {
-            val work = PeriodicWorkRequestBuilder<StatsWorker>(emailFrequency.toLong(), TimeUnit.HOURS)
+            val work = PeriodicWorkRequestBuilder<StatsWorker>(emailFrequency.toLong(), TimeUnit.MINUTES)
                 .setInputData(
                     workDataOf(
                         StatsWorker.KEY_EMAIL to userEmail,
-                        StatsWorker.KEY_HOURS to emailFrequency
+                        StatsWorker.KEY_MINUTES to emailFrequency
                     )
                 )
                 .build()

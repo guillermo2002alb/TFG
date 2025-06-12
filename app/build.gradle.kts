@@ -18,7 +18,7 @@ android {
         versionName = "1.0"
 
 
-        buildConfigField("String", "SENDGRID_API_KEY", "\"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\"")
+        buildConfigField("String", "SENDGRID_API_KEY", "\"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\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
