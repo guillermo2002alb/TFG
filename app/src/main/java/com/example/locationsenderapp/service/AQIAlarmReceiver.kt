@@ -90,24 +90,38 @@ class AQIAlarmReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        if (context == null || intent?.action != ACTION_AQI_CHECK) return
+        if (context == null || intent == null) return
 
-        val frequency = intent.getIntExtra(EXTRA_FREQUENCY, 30)
+        when (intent.action) {
+            ACTION_AQI_CHECK -> {
+                val frequency = intent.getIntExtra(EXTRA_FREQUENCY, 30)
 
-        Log.d(TAG, "Alarma AQI disparada")
+                Log.d(TAG, "Alarma AQI disparada")
 
-        // Crear canal de notificación si no existe
-        createBackupNotificationChannel(context)
+                // Crear canal de notificación si no existe
+                createBackupNotificationChannel(context)
 
-        // Programar la siguiente alarma inmediatamente
-        scheduleAlarm(context, frequency)
+                // Programar la siguiente alarma inmediatamente
+                scheduleAlarm(context, frequency)
 
-        // Verificar y enviar notificación en una corrutina
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                checkAndSendAQINotification(context)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error en verificación AQI", e)
+                // Verificar y enviar notificación en una corrutina
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        checkAndSendAQINotification(context)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error en verificación AQI", e)
+                    }
+                }
+            }
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_PACKAGE_REPLACED -> {
+                val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                val enabled = prefs.getBoolean(MainActivity.PREF_NOTIFICATIONS_ENABLED, false)
+                if (enabled) {
+                    val freq = prefs.getInt(MainActivity.PREF_NOTIFICATION_FREQUENCY, 30)
+                    NotificationScheduler.scheduleNotifications(context, freq)
+                }
             }
         }
     }
