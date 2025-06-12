@@ -76,7 +76,7 @@
         <receiver
             android:name=".service.AQIAlarmReceiver"
             android:enabled="true"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="com.example.locationsenderapp.AQI_CHECK" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -61,9 +61,10 @@ dependencies {
     implementation("androidx.compose.material3:material3")
 
     // Room database
-    implementation("androidx.room:room-runtime:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
+    implementation("androidx.room:room-runtime:2.7.1")
+    kapt("androidx.room:room-compiler:2.7.1")
+    implementation("androidx.room:room-ktx:2.7.1")
+
 
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     implementation("org.eclipse.paho:org.eclipse.paho.android.service:1.1.1")
@@ -101,6 +102,7 @@ dependencies {
     // Gson para JSON
     implementation("com.google.code.gson:gson:2.10.1")
     implementation(libs.androidx.room.runtime.android)
+
 
     // Testing
     testImplementation("junit:junit:4.13.2")

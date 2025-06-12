@@ -1,5 +1,7 @@
 package com.example.locationsenderapp
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,6 +11,8 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import java.util.concurrent.TimeUnit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Notifications
@@ -95,7 +99,7 @@ class MainActivity : ComponentActivity() {
         private const val PREF_NOTIFICATIONS_ENABLED = "notifications_enabled"
         private const val PREF_NOTIFICATION_FREQUENCY = "notification_frequency"
         private const val PREF_USER_EMAIL = "user_email"
-
+        private const val PREF_EMAIL_FREQUENCY = "email_frequency"
         // Lista de sensores con sus datos
         val sensorsData = mutableStateMapOf<String, SensorInfo>()
 
@@ -122,6 +126,7 @@ class MainActivity : ComponentActivity() {
     private var showBatteryOptimizationDialog by mutableStateOf(false)
     private var notificationsEnabled by mutableStateOf(false)
     private var notificationFrequency by mutableStateOf(30) // minutos por defecto
+    private var emailFrequency by mutableStateOf(24) // horas por defecto
     private lateinit var sharedPreferences: SharedPreferences
 
     // Cliente para ubicación
@@ -137,6 +142,7 @@ class MainActivity : ComponentActivity() {
         notificationsEnabled = sharedPreferences.getBoolean(PREF_NOTIFICATIONS_ENABLED, false)
         notificationFrequency = sharedPreferences.getInt(PREF_NOTIFICATION_FREQUENCY, 30)
         userEmail = sharedPreferences.getString(PREF_USER_EMAIL, "") ?: ""
+        emailFrequency = sharedPreferences.getInt(PREF_EMAIL_FREQUENCY, 24)
 
         stationRepository = StationRepository(StationDatabase.getDatabase(this).stationDataDao())
         granadaAirService = GranadaAirQualityService().apply {
@@ -219,16 +225,8 @@ class MainActivity : ComponentActivity() {
         // Iniciar servicio de datos de Granada
         granadaAirService.startPolling()
 
-        if (userEmail.isNotEmpty()) {
-            val work = PeriodicWorkRequestBuilder<StatsWorker>(24, TimeUnit.HOURS)
-                .setInputData(workDataOf(StatsWorker.KEY_EMAIL to userEmail))
-                .build()
-            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-                "stats_worker",
-                ExistingPeriodicWorkPolicy.UPDATE,
-                work
-            )
-        }
+        scheduleEmailWorker()
+
 
         // Obtener ubicación del usuario con interpolación
         getCurrentLocationWithInterpolation()
@@ -512,13 +510,16 @@ class MainActivity : ComponentActivity() {
     fun SettingsDialog(
         notificationsEnabled: Boolean,
         notificationFrequency: Int,
+        emailFrequency: Int,
         email: String,
         onNotificationsEnabledChange: (Boolean) -> Unit,
         onFrequencyChange: (Int) -> Unit,
+        onEmailFrequencyChange: (Int) -> Unit,
         onEmailChange: (String) -> Unit,
         onDismiss: () -> Unit
     ) {
         var tempFrequency by remember { mutableStateOf(notificationFrequency.toString()) }
+        var tempEmailFrequency by remember { mutableStateOf(emailFrequency.toString()) }
         var tempEmail by remember { mutableStateOf(email) }
         AlertDialog(
             onDismissRequest = onDismiss,
@@ -622,6 +623,28 @@ class MainActivity : ComponentActivity() {
 
                             Spacer(modifier = Modifier.height(8.dp))
 
+                            OutlinedTextField(
+                                value = tempEmailFrequency,
+                                onValueChange = { newValue ->
+                                    if (newValue.all { it.isDigit() } && newValue.length <= 3) {
+                                        tempEmailFrequency = newValue
+                                    }
+                                },
+                                label = { Text("Frecuencia email (h)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Text(
+                                text = "Rango: 1-168 horas",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+
                             // Información adicional sobre el servicio
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -666,6 +689,10 @@ class MainActivity : ComponentActivity() {
                         val frequency = tempFrequency.toIntOrNull()
                         if (frequency != null && frequency in 5..999) {
                             onFrequencyChange(frequency)
+                        }
+                        val emailFreq = tempEmailFrequency.toIntOrNull()
+                        if (emailFreq != null && emailFreq in 1..168) {
+                            onEmailFrequencyChange(emailFreq)
                         }
                         onEmailChange(tempEmail)
                         onDismiss()
@@ -735,7 +762,8 @@ class MainActivity : ComponentActivity() {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(24.dp),
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
@@ -999,6 +1027,7 @@ class MainActivity : ComponentActivity() {
             SettingsDialog(
                 notificationsEnabled = notificationsEnabled,
                 notificationFrequency = notificationFrequency,
+                emailFrequency = emailFrequency,
                 email = userEmail,
                 onNotificationsEnabledChange = { enabled ->
                     notificationsEnabled = enabled
@@ -1033,9 +1062,15 @@ class MainActivity : ComponentActivity() {
                         Log.d(TAG, "Servicios reiniciados con frecuencia: $frequency min")
                     }
                 },
+                onEmailFrequencyChange = { freq ->
+                    emailFrequency = freq
+                    savePreferences()
+                    scheduleEmailWorker()
+                },
                 onEmailChange = {
                     userEmail = it
                     savePreferences()
+                    scheduleEmailWorker()
                 },
                 onDismiss = { showSettingsDialog = false }
             )
@@ -2136,9 +2171,31 @@ class MainActivity : ComponentActivity() {
             putBoolean(PREF_NOTIFICATIONS_ENABLED, notificationsEnabled)
             putInt(PREF_NOTIFICATION_FREQUENCY, notificationFrequency)
             putString(PREF_USER_EMAIL, userEmail)
+            putInt(PREF_EMAIL_FREQUENCY, emailFrequency)
             apply()
         }
     }
+
+    private fun scheduleEmailWorker() {
+        if (userEmail.isNotEmpty()) {
+            val work = PeriodicWorkRequestBuilder<StatsWorker>(emailFrequency.toLong(), TimeUnit.HOURS)
+                .setInputData(
+                    workDataOf(
+                        StatsWorker.KEY_EMAIL to userEmail,
+                        StatsWorker.KEY_HOURS to emailFrequency
+                    )
+                )
+                .build()
+            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "stats_worker",
+                ExistingPeriodicWorkPolicy.UPDATE,
+                work
+            )
+        } else {
+            WorkManager.getInstance(this).cancelUniqueWork("stats_worker")
+        }
+    }
+
 
     // Manejar cuando la aplicación vuelve al primer plano
     override fun onResume() {
