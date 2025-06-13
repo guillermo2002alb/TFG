@@ -1,7 +1,5 @@
 package com.example.locationsenderapp
 
-
-
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import android.app.NotificationChannel
@@ -84,6 +82,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.*
+import android.net.Uri
+import androidx.compose.material.icons.filled.Analytics
 
 class MainActivity : ComponentActivity() {
 
@@ -517,7 +517,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             .addOnFailureListener { e ->
-                
+
                 Log.e(TAG, "Error obteniendo última ubicación", e)
             }
     }
@@ -695,8 +695,8 @@ class MainActivity : ComponentActivity() {
     fun MainScreen() {
         // Colores basados en el logo BreatheSafe
         val gradientColors = listOf(
-            Color(0xFF2E7D32), // Verde oscuro
-            Color(0xFF43A047)  // Verde medio
+            Color(0xFF1A237E), // Azul marino profundo
+            Color(0xFF3949AB)  // Azul índigo
         )
 
         Column(
@@ -715,18 +715,7 @@ class MainActivity : ComponentActivity() {
                     )
                 },
                 actions = {
-                    // Botón de optimización de batería (solo si las notificaciones están habilitadas)
-                    if (notificationsEnabled && !BatteryOptimizationHelper.isIgnoringBatteryOptimizations(this@MainActivity)) {
-                        IconButton(onClick = { showBatteryOptimizationDialog = true }) {
-                            Icon(
-                                Icons.Default.BatteryAlert,
-                                contentDescription = "Optimización de batería",
-                                tint = Color(0xFFFF6F00)
-                            )
-                        }
-                    }
-
-                    // Botón de configuración
+                    // Solo botón de configuración (eliminar el de batería)
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             Icons.Default.Settings,
@@ -754,46 +743,48 @@ class MainActivity : ComponentActivity() {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Logo BreatheSafe
+                    // Logo BreatheSafe con diseño más profesional
                     Box(
                         contentAlignment = Alignment.Center
                     ) {
-                        // Fondo circular con gradiente
+                        // Fondo circular con gradiente más sutil
                         Box(
                             modifier = Modifier
-                                .size(120.dp)
+                                .size(100.dp)
                                 .clip(CircleShape)
                                 .background(
                                     Brush.radialGradient(
                                         colors = listOf(
-                                            Color(0xFFFFA726), // Naranja
-                                            Color(0xFFFF6F00)  // Naranja oscuro
+                                            Color(0xFF64B5F6), // Azul claro
+                                            Color(0xFF1E88E5)  // Azul medio
                                         )
                                     )
                                 )
                         )
 
-                        // Simulación del logo con texto
-                        Text(
-                            text = "🌬️",
-                            fontSize = 60.sp,
-                            modifier = Modifier.offset(x = (-5).dp)
+                        // Icono más profesional
+                        Icon(
+                            imageVector = Icons.Default.Air,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(50.dp)
                         )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "Monitoreo de Calidad del Aire",
+                        text = "Sistema de Monitoreo de Calidad del Aire",
                         style = MaterialTheme.typography.headlineSmall,
                         color = Color.White,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Medium
                     )
 
                     Text(
-                        text = "Datos en tiempo real de contaminación",
+                        text = "Universidad de Granada",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = Color.White.copy(alpha = 0.9f),
                         textAlign = TextAlign.Center
                     )
                 }
@@ -914,6 +905,8 @@ class MainActivity : ComponentActivity() {
 
                                 val title = when {
                                     deviceId.contains("granada-") -> "Estación: ${sensorInfo.pollutionData.name}"
+                                    deviceId.contains("sinco2") -> "Estación: ETSIIT"
+                                    deviceId.contains("tfg") -> "Estación: Camino de Ronda"
                                     else -> "Sensor: $deviceId"
                                 }
 
@@ -969,17 +962,6 @@ class MainActivity : ComponentActivity() {
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
 
-                            // Información sobre interpolación (si hay datos del usuario)
-                            sensorsData["user-location"]?.let { userSensor ->
-                                HorizontalDivider(color = Color.Gray.copy(alpha = 0.2f))
-
-                                LocationInfo(
-                                    icon = Icons.Default.Calculate,
-                                    title = "Método de Cálculo",
-                                    content = "Interpolación por distancia inversa ponderada (IDW) basada en ${sensorsData.size - 1} estaciones",
-                                    iconColor = Color(0xFF2196F3)
-                                )
-                            }
 
                             // Última actualización
                             lastUpdateTime?.let {
@@ -1004,9 +986,9 @@ class MainActivity : ComponentActivity() {
                         .fillMaxWidth()
                         .height(56.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFFA726) // Naranja
+                        containerColor = Color(0xFF1976D2) // Azul profesional
                     ),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1020,14 +1002,46 @@ class MainActivity : ComponentActivity() {
                         Text(
                             text = "Ver Mapa de Contaminación",
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("http://rt.ugr.es:8953/dashboard/53b27400-4846-11f0-8e5b-6bfecd626acc?publicId=3b734db0-29bf-11f0-8e5b-6bfecd626acc"))
+                        startActivity(intent)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF0D47A1) // Azul más oscuro
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                        Text(
+                            text = "Ver Estadísticas",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
                             color = Color.White
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
-
                 // Footer
                 Text(
                     text = "Powered by The Things Network & WAQI",
@@ -1286,7 +1300,7 @@ class MainActivity : ComponentActivity() {
                                         individualAqis.maxOrNull()?.toInt() ?: sensorInfo.pollutionData.aqi.toInt()
                                     }
                                     "AQI: $aqi"
-                            }
+                                }
                             },
                             icon = BitmapDescriptorFactory.defaultMarker(markerColor),
                             zIndex = zIndex,
@@ -1973,12 +1987,11 @@ class MainActivity : ComponentActivity() {
 
             "CO2" -> {
                 when {
-                    value <= 1000 -> (value / 1000) * 50
-                    value <= 2000 -> 50 + ((value - 1000) / 1000) * 50
-                    value <= 5000 -> 100 + ((value - 2000) / 3000) * 50
-                    value <= 10000 -> 150 + ((value - 5000) / 5000) * 50
-                    value <= 40000 -> 200 + ((value - 10000) / 30000) * 100
-                    else -> 300 + ((value - 40000) / 40000) * 100
+                    value <= 400 -> (value / 400) * 33      // Aire exterior limpio - Muy Buena
+                    value <= 1000 -> 33 + ((value - 400) / 600) * 33    // Interior bien ventilado - Buena
+                    value <= 2000 -> 66 + ((value - 1000) / 1000) * 34  // Interior normal - Regular
+                    value <= 5000 -> 100 + ((value - 2000) / 3000) * 100 // Interior mal ventilado - Mala
+                    else -> 200 + ((value - 5000) / 5000) * 100         // Perjudicial - Muy Mala
                 }
             }
 

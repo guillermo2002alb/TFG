@@ -45,7 +45,7 @@
         <!-- API Key de Google Maps -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyDoEx2kaGz3PxwbI9T7ccTSg5xjdw8Nw8Q" />
+            android:value="AIzaSyCwFYyGR5YkVn7wz4toFqAtv2YO-yVb_h8" />
 
         <!-- Actividad principal -->
         <activity
