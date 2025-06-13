@@ -210,6 +210,8 @@ class AQIForegroundService : Service() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
 
         try {
             with(NotificationManagerCompat.from(this)) {

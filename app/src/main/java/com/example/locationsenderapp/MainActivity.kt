@@ -1,5 +1,7 @@
 package com.example.locationsenderapp
 
+
+
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import android.app.NotificationChannel
@@ -28,7 +30,6 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.Intent
-import com.example.locationsenderapp.service.StatsWorker
 import com.example.locationsenderapp.data.StationDatabase
 import com.example.locationsenderapp.data.StationRepository
 import android.content.pm.PackageManager
@@ -95,11 +96,11 @@ class MainActivity : ComponentActivity() {
         private const val WORK_NAME = "aqi_notification_work"
 
         // Preferencias compartidas
-        private const val PREFS_NAME = "breathe_safe_prefs"
-        private const val PREF_NOTIFICATIONS_ENABLED = "notifications_enabled"
-        private const val PREF_NOTIFICATION_FREQUENCY = "notification_frequency"
-        private const val PREF_USER_EMAIL = "user_email"
-        private const val PREF_EMAIL_FREQUENCY = "email_frequency"
+        // Preferencias compartidas (visibles para otros componentes)
+        const val PREFS_NAME = "breathe_safe_prefs"
+        const val PREF_NOTIFICATIONS_ENABLED = "notifications_enabled"
+        const val PREF_NOTIFICATION_FREQUENCY = "notification_frequency"
+
         // Lista de sensores con sus datos
         val sensorsData = mutableStateMapOf<String, SensorInfo>()
 
@@ -126,7 +127,6 @@ class MainActivity : ComponentActivity() {
     private var showBatteryOptimizationDialog by mutableStateOf(false)
     private var notificationsEnabled by mutableStateOf(false)
     private var notificationFrequency by mutableStateOf(30) // minutos por defecto
-    private var emailFrequency by mutableStateOf(1) // horas por defecto
     private lateinit var sharedPreferences: SharedPreferences
 
     // Cliente para ubicación
@@ -141,8 +141,7 @@ class MainActivity : ComponentActivity() {
         sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         notificationsEnabled = sharedPreferences.getBoolean(PREF_NOTIFICATIONS_ENABLED, false)
         notificationFrequency = sharedPreferences.getInt(PREF_NOTIFICATION_FREQUENCY, 30)
-        userEmail = sharedPreferences.getString(PREF_USER_EMAIL, "") ?: ""
-        emailFrequency = sharedPreferences.getInt(PREF_EMAIL_FREQUENCY, 1)
+
 
         stationRepository = StationRepository(StationDatabase.getDatabase(this).stationDataDao())
         granadaAirService = GranadaAirQualityService().apply {
@@ -225,7 +224,7 @@ class MainActivity : ComponentActivity() {
         // Iniciar servicio de datos de Granada
         granadaAirService.startPolling()
 
-        scheduleEmailWorker()
+
 
 
         // Obtener ubicación del usuario con interpolación
@@ -499,10 +498,27 @@ class MainActivity : ComponentActivity() {
 
                     // Calcular y actualizar datos interpolados
                     updateUserLocationData()
+                } else {
+                    // Si no hay última ubicación conocida, obtener una nueva
+                    fusedLocationClient.getCurrentLocation(
+                        Priority.PRIORITY_HIGH_ACCURACY,
+                        null
+                    ).addOnSuccessListener { loc ->
+                        if (loc != null) {
+                            myLocation = LatLng(loc.latitude, loc.longitude)
+                            Log.i(TAG, "Ubicación del usuario obtenida: ${loc.latitude}, ${loc.longitude}")
+                            updateUserLocationData()
+                        } else {
+                            Log.w(TAG, "No se pudo obtener ubicación actual")
+                        }
+                    }.addOnFailureListener { e ->
+                        Log.e(TAG, "Error obteniendo ubicación actual", e)
+                    }
                 }
             }
             .addOnFailureListener { e ->
-                Log.e(TAG, "Error obteniendo ubicación", e)
+                
+                Log.e(TAG, "Error obteniendo última ubicación", e)
             }
     }
 
@@ -510,17 +526,13 @@ class MainActivity : ComponentActivity() {
     fun SettingsDialog(
         notificationsEnabled: Boolean,
         notificationFrequency: Int,
-        emailFrequency: Int,
-        email: String,
         onNotificationsEnabledChange: (Boolean) -> Unit,
         onFrequencyChange: (Int) -> Unit,
-        onEmailFrequencyChange: (Int) -> Unit,
-        onEmailChange: (String) -> Unit,
+
         onDismiss: () -> Unit
     ) {
         var tempFrequency by remember { mutableStateOf(notificationFrequency.toString()) }
-        var tempEmailFrequency by remember { mutableStateOf(emailFrequency.toString()) }
-        var tempEmail by remember { mutableStateOf(email) }
+
         AlertDialog(
             onDismissRequest = onDismiss,
             title = {
@@ -606,41 +618,14 @@ class MainActivity : ComponentActivity() {
                             )
 
                             Text(
-                                text = "Rango: 5-999 minutos",
+                                text = "Rango: 1-999 minutos",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.Gray
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            OutlinedTextField(
-                                value = tempEmail,
-                                onValueChange = { tempEmail = it },
-                                label = { Text("Email") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
 
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            OutlinedTextField(
-                                value = tempEmailFrequency,
-                                onValueChange = { newValue ->
-                                    if (newValue.all { it.isDigit() } && newValue.length <= 3) {
-                                        tempEmailFrequency = newValue
-                                    }
-                                },
-                                label = { Text("Frecuencia email (h)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Text(
-                                text = "Rango: 1-168 horas",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.Gray
-                            )
 
                             Spacer(modifier = Modifier.height(8.dp))
 
@@ -687,14 +672,10 @@ class MainActivity : ComponentActivity() {
                 TextButton(
                     onClick = {
                         val frequency = tempFrequency.toIntOrNull()
-                        if (frequency != null && frequency in 5..999) {
+                        if (frequency != null && frequency in 1..999) {
                             onFrequencyChange(frequency)
                         }
-                        val emailFreq = tempEmailFrequency.toIntOrNull()
-                        if (emailFreq != null && emailFreq in 1..168) {
-                            onEmailFrequencyChange(emailFreq)
-                        }
-                        onEmailChange(tempEmail)
+
                         onDismiss()
                     }
                 ) {
@@ -1061,8 +1042,6 @@ class MainActivity : ComponentActivity() {
             SettingsDialog(
                 notificationsEnabled = notificationsEnabled,
                 notificationFrequency = notificationFrequency,
-                emailFrequency = emailFrequency,
-                email = userEmail,
                 onNotificationsEnabledChange = { enabled ->
                     notificationsEnabled = enabled
                     savePreferences()
@@ -1095,16 +1074,6 @@ class MainActivity : ComponentActivity() {
                         }
                         Log.d(TAG, "Servicios reiniciados con frecuencia: $frequency min")
                     }
-                },
-                onEmailFrequencyChange = { freq ->
-                    emailFrequency = freq
-                    savePreferences()
-                    scheduleEmailWorker()
-                },
-                onEmailChange = {
-                    userEmail = it
-                    savePreferences()
-                    scheduleEmailWorker()
                 },
                 onDismiss = { showSettingsDialog = false }
             )
@@ -2254,31 +2223,11 @@ class MainActivity : ComponentActivity() {
         sharedPreferences.edit().apply {
             putBoolean(PREF_NOTIFICATIONS_ENABLED, notificationsEnabled)
             putInt(PREF_NOTIFICATION_FREQUENCY, notificationFrequency)
-            putString(PREF_USER_EMAIL, userEmail)
-            putInt(PREF_EMAIL_FREQUENCY, emailFrequency)
             apply()
         }
     }
 
-    private fun scheduleEmailWorker() {
-        if (userEmail.isNotEmpty()) {
-            val work = PeriodicWorkRequestBuilder<StatsWorker>(emailFrequency.toLong(), TimeUnit.MINUTES)
-                .setInputData(
-                    workDataOf(
-                        StatsWorker.KEY_EMAIL to userEmail,
-                        StatsWorker.KEY_MINUTES to emailFrequency
-                    )
-                )
-                .build()
-            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-                "stats_worker",
-                ExistingPeriodicWorkPolicy.UPDATE,
-                work
-            )
-        } else {
-            WorkManager.getInstance(this).cancelUniqueWork("stats_worker")
-        }
-    }
+
 
 
     // Manejar cuando la aplicación vuelve al primer plano
@@ -2381,6 +2330,8 @@ class MainActivity : ComponentActivity() {
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                     .setContentIntent(pendingIntent)
                     .setAutoCancel(true)
+                    .setWhen(System.currentTimeMillis())
+                    .setShowWhen(true)
 
             with(NotificationManagerCompat.from(applicationContext)) {
                 if (ActivityCompat.checkSelfPermission(

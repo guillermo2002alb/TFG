@@ -15,6 +15,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.locationsenderapp.MainActivity
 import kotlinx.coroutines.*
+import com.example.locationsenderapp.service.TTNDataService
+import com.example.locationsenderapp.service.NotificationScheduler
 
 class AQIAlarmReceiver : BroadcastReceiver() {
 
@@ -90,24 +92,59 @@ class AQIAlarmReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        if (context == null || intent?.action != ACTION_AQI_CHECK) return
+        if (context == null || intent?.action == null) return
 
-        val frequency = intent.getIntExtra(EXTRA_FREQUENCY, 30)
+        when (intent.action) {
+            ACTION_AQI_CHECK -> {
+                val frequency = intent.getIntExtra(EXTRA_FREQUENCY, 30)
 
-        Log.d(TAG, "Alarma AQI disparada")
+                Log.d(TAG, "Alarma AQI disparada")
 
-        // Crear canal de notificación si no existe
-        createBackupNotificationChannel(context)
 
-        // Programar la siguiente alarma inmediatamente
-        scheduleAlarm(context, frequency)
+                // Crear canal de notificación si no existe
+                createBackupNotificationChannel(context)
 
-        // Verificar y enviar notificación en una corrutina
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                checkAndSendAQINotification(context)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error en verificación AQI", e)
+
+                // Programar la siguiente alarma inmediatamente
+                scheduleAlarm(context, frequency)
+                // Verificar y enviar notificación en una corrutina
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        checkAndSendAQINotification(context)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error en verificación AQI", e)
+                    }
+                }
+            }
+
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_PACKAGE_REPLACED -> {
+                val prefs = context.getSharedPreferences(
+                    MainActivity.PREFS_NAME,
+                    Context.MODE_PRIVATE
+                )
+
+                val enabled = prefs.getBoolean(
+                    MainActivity.PREF_NOTIFICATIONS_ENABLED,
+                    false
+                )
+                val freq = prefs.getInt(
+                    MainActivity.PREF_NOTIFICATION_FREQUENCY,
+                    30
+                )
+
+                if (enabled) {
+                    NotificationScheduler.scheduleNotifications(context, freq)
+                }
+
+                try {
+                    val serviceIntent = Intent(context, TTNDataService::class.java)
+                    context.startService(serviceIntent)
+                    Log.d(TAG, "TTNDataService iniciado desde receptor")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error iniciando TTNDataService", e)
+                }
             }
         }
     }
@@ -200,6 +237,8 @@ class AQIAlarmReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
 
         try {
             with(NotificationManagerCompat.from(context)) {
